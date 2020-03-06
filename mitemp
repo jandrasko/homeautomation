@@ -1,0 +1,34 @@
+#!/bin/bash
+#http://www.d0wn.com/using-bash-and-gatttool-to-get-readings-from-xiaomi-mijia-lywsd03mmc-temperature-humidity-sensor/
+#bt=$(timeout 15 gatttool -b A4:C1:38:A6:B4:30 --char-write-req --handle='0x0038' --value="0100" --listen)
+
+for sensors in A4:C1:38:A6:B4:30 A4:C1:38:DC:B3:1A A4:C1:38:9A:42:C3; do
+bt=$(timeout 15 gatttool -b $sensors --char-write-req --handle='0x0038' --value="0100" --listen)
+if [ -z "$bt" ]
+then
+echo "The reading failed"
+else
+#echo "Got data"
+#echo $bt
+temphexa=$(echo $bt | awk -F ' ' '{print $12$11}'| tr [:lower:] [:upper:] )
+humhexa=$(echo $bt | awk -F ' ' '{print $13}'| tr [:lower:] [:upper:])
+temperature100=$(echo "ibase=16; $temphexa" | bc)
+humidity=$(echo "ibase=16; $humhexa" | bc)
+temperature=$(echo "scale=2;$temperature100/100"|bc)
+timestamp=`date --utc +%FT%T`
+
+# send data to Elasticsearch
+if [ $sensors == "A4:C1:38:A6:B4:30" ]
+then
+curl --silent --output /dev/null -X POST https://xxxxx:xxxxx@xxxxx.net/temp/_doc -H "Content-Type: application/json" -d '{"sensor": "Spalna", "temperature":"'"$temperature"'", "humidity":"'"$humidity"'", "date":"'"$timestamp"'"}'
+elif [ $sensors == "A4:C1:38:DC:B3:1A" ]
+then
+curl --silent --output /dev/null -X POST https://xxxxx:xxxxx@xxxxx.net/temp/_doc -H "Content-Type: application/json" -d '{"sensor": "Kupelna", "temperature":"'"$temperature"'", "humidity":"'"$humidity"'", "date":"'"$timestamp"'"}'
+elif [ $sensors == "A4:C1:38:9A:42:C3" ]
+then
+curl --silent --output /dev/null -X POST https://xxxxx:xxxxx@xxxxx.net/temp/_doc -H "Content-Type: application/json" -d '{"sensor": "Obyvacka", "temperature":"'"$temperature"'", "humidity":"'"$humidity"'", "date":"'"$timestamp"'"}'
+fi
+
+
+fi
+done
